@@ -4,7 +4,6 @@ import Foundation
 final class ShoesViewModel: ObservableObject {
     @Published var isAuthorized = false
     @Published var loading = false
-    @Published var initialLoading = true
     @Published var errorMessage: String?
     @Published var stats: [UUID: ShoeStats] = [:]
 
@@ -20,29 +19,19 @@ final class ShoesViewModel: ObservableObject {
         self.activity = activity
     }
 
-    // New signature with triggerInitialLoading
-    func requestHealthAccess(triggerInitialLoading: Bool) async {
+    func requestHealthAccess() async {
         do {
             try await hk.requestAuthorization()
             isAuthorized = true
-            // Only enable the big initial overlay when explicitly requested (app-start path)
-            await reloadAll(isInitial: triggerInitialLoading)
+            await reloadAll()
         } catch {
             errorMessage = error.localizedDescription
-            // If we were in an initial flow, ensure we dismiss the overlay on failure
-            if triggerInitialLoading {
-                initialLoading = false
-            }
         }
     }
 
     func reloadAll(isInitial: Bool = false) async {
-        if isInitial { initialLoading = true }
         loading = true
-        defer {
-            loading = false
-            if isInitial { initialLoading = false }
-        }
+        defer { loading = false }
 
         stats.removeAll()
         let now = Date()
