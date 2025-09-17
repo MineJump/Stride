@@ -6,7 +6,7 @@ struct ShoesListView: View {
     @EnvironmentObject var activity: ActivityManager
 
     @State private var showingAdd = false
-    @State private var showToast = false
+    @State private var showingProfile = false
 
     var body: some View {
         NavigationStack {
@@ -24,7 +24,7 @@ struct ShoesListView: View {
                             let km = vm.stats[shoe.id]?.km ?? 0.0
                             ShoeRow(shoe: shoe, steps: steps, km: km) {
                                 vm.activate(shoeId: shoe.id)
-                                Task { await vm.reloadAll() }
+                                Task { await vm.reloadAll(isInitial: false) }
                             }
                         }
                         .onDelete(perform: delete)
@@ -35,43 +35,12 @@ struct ShoesListView: View {
             .navigationTitle("Stride")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        Task {
-                            // Manually requesting Health access should NOT show the big initial loading overlay.
-                            await vm.requestHealthAccess(triggerInitialLoading: false)
-                        }
-                    } label: {
-                        Image(systemName: vm.isAuthorized ? "checkmark.shield" : "shield")
-                    }
-                    .help("Authorize Health access")
+                    Button { showingAdd = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("Add Shoe")
                 }
-
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingAdd = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel("Add Shoe")
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        Task { await vm.reloadAll() }
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation { showToast = true }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                            withAnimation { showToast = false }
-                        }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .accessibilityLabel("Refresh")
-                }
-            }
-            .overlay(alignment: .top) {
-                if vm.initialLoading {
-                    LoadingView()
+                    Button { showingProfile = true } label: { Image(systemName: "person.crop.circle") }
+                        .accessibilityLabel("Profile")
                 }
             }
             .task {
@@ -83,8 +52,29 @@ struct ShoesListView: View {
                 AddShoeView()
                     .presentationDetents([.medium])
             }
+            .sheet(isPresented: $showingProfile) {
+                NavigationStack {
+                    ProfileFormView()
+                        .navigationTitle("Profile")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button {
+                                    showingProfile = false
+                                } label: {
+                                    Image(systemName: "checkmark").foregroundStyle(.white)
+                                }
+                                
+                                .buttonStyle(.borderedProminent)
+                                .tint(.blue)
+                                .accessibilityLabel("Done")
+                            }
+                        }
+                }
+                .presentationDetents([.medium, .large])
+            }
             .refreshable {
-                await vm.reloadAll()
+                await vm.reloadAll(isInitial: false)
             }
             .alert("Error", isPresented: .constant(vm.errorMessage != nil), actions: {
                 Button("OK") { vm.errorMessage = nil }
@@ -95,13 +85,12 @@ struct ShoesListView: View {
     }
 
     func authorizeTapped() async {
-        // App-start auto path should still be allowed to show the initial overlay.
-        await vm.requestHealthAccess(triggerInitialLoading: true)
+        await vm.requestHealthAccess()
     }
 
     func delete(at offsets: IndexSet) {
         vm.deleteShoes(at: offsets)
-        Task { await vm.reloadAll() }
+        Task { await vm.reloadAll(isInitial: false) }
     }
 }
 
@@ -140,6 +129,7 @@ struct ShoeRow: View {
                 Spacer()
                 Button(isActive ? "Active" : "Activate") {
                     onActivate?()
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(isActive ? .green : .blue)
