@@ -8,6 +8,10 @@ struct ShoesListView: View {
     @State private var showingAdd = false
     @State private var showingProfile = false
 
+    // EDIT: hold the shoe being edited and sheet flag
+    @State private var editingShoe: Shoe? = nil
+    @State private var showingEdit = false
+
     var body: some View {
         NavigationStack {
             Group {
@@ -25,6 +29,24 @@ struct ShoesListView: View {
                             ShoeRow(shoe: shoe, steps: steps, km: km) {
                                 vm.activate(shoeId: shoe.id)
                                 Task { await vm.reloadAll(isInitial: false) }
+                            }
+                            // EDIT: swipe actions
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    if let index = store.shoes.firstIndex(of: shoe) {
+                                        delete(at: IndexSet(integer: index))
+                                    }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+
+                                Button {
+                                    editingShoe = shoe
+                                    showingEdit = true
+                                } label: {
+                                    Label("Edit", systemImage: "pencil")
+                                }
+                                .tint(.orange)
                             }
                         }
                         .onDelete(perform: delete)
@@ -52,6 +74,13 @@ struct ShoesListView: View {
                 AddShoeView()
                     .presentationDetents([.medium])
             }
+            // EDIT: present AddShoeView in edit mode
+            .sheet(isPresented: $showingEdit, onDismiss: { editingShoe = nil }) {
+                if let shoe = editingShoe {
+                    AddShoeView(editing: shoe)
+                        .presentationDetents([.medium])
+                }
+            }
             .sheet(isPresented: $showingProfile) {
                 NavigationStack {
                     ProfileFormView()
@@ -64,7 +93,6 @@ struct ShoesListView: View {
                                 } label: {
                                     Image(systemName: "checkmark").foregroundStyle(.white)
                                 }
-                                
                                 .buttonStyle(.borderedProminent)
                                 .tint(.blue)
                                 .accessibilityLabel("Done")
@@ -107,7 +135,7 @@ struct ShoeRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 HStack(spacing: 8) {
                     if isActive {
@@ -122,10 +150,30 @@ struct ShoeRow: View {
                 Text("\(Int(km.rounded())) km")
                     .font(.subheadline)
             }
+
+            Group {
+                LabeledContent("Brand") {
+                    Text(shoe.brand.isEmpty ? "—" : shoe.brand).foregroundStyle(.secondary)
+                }
+                LabeledContent("Model") {
+                    Text(shoe.model.isEmpty ? "—" : shoe.model).foregroundStyle(.secondary)
+                }
+                LabeledContent("Price") {
+                    if let price = shoe.price {
+                        Text(price, format: .currency(code: "EUR"))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("—").foregroundStyle(.secondary)
+                    }
+                }
+                LabeledContent("Start date") {
+                    Text(shoe.startDate, style: .date).foregroundStyle(.secondary)
+                }
+            }
+            .font(.subheadline)
+
             HStack {
-                Text("Steps: \(steps)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                LabeledContent("Steps") { Text("\(steps)").foregroundStyle(.secondary) }
                 Spacer()
                 Button(isActive ? "Active" : "Activate") {
                     onActivate?()

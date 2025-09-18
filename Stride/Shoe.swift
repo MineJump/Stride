@@ -3,12 +3,37 @@ import Foundation
 struct Shoe: Identifiable, Codable, Equatable {
     let id: UUID
     var name: String
+    var brand: String
+    var model: String
+    var price: Double?
     var startDate: Date
 
-    init(id: UUID = UUID(), name: String, startDate: Date = Date()) {
+    init(
+        id: UUID = UUID(),
+        name: String,
+        brand: String = "",
+        model: String = "",
+        price: Double? = nil,
+        startDate: Date = Date()
+    ) {
         self.id = id
         self.name = name
+        self.brand = brand
+        self.model = model
+        self.price = price
         self.startDate = startDate
+    }
+
+    // Backward-compatible decoding (for old saved data without new fields)
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        self.brand = try container.decodeIfPresent(String.self, forKey: .brand) ?? ""
+        self.model = try container.decodeIfPresent(String.self, forKey: .model) ?? ""
+        self.price = try container.decodeIfPresent(Double.self, forKey: .price)
+        self.startDate = try container.decodeIfPresent(Date.self, forKey: .startDate) ?? Date()
     }
 }
 
@@ -19,8 +44,14 @@ final class ShoeStore: ObservableObject {
 
     init() { load() }
 
-    func addShoe(name: String, startDate: Date) {
-        shoes.append(Shoe(name: name, startDate: startDate))
+    func addShoe(
+        name: String,
+        brand: String,
+        model: String,
+        price: Double?,
+        startDate: Date
+    ) {
+        shoes.append(Shoe(name: name, brand: brand, model: model, price: price, startDate: startDate))
         save()
     }
 

@@ -75,8 +75,12 @@ final class ShoesViewModel: ObservableObject {
         }
     }
 
-    func addShoe(name: String, startDate: Date) {
-        store.addShoe(name: name, startDate: startDate)
+    func addShoe(name: String, brand: String, model: String, price: Double?, startDate: Date) {
+        store.addShoe(name: name, brand: brand, model: model, price: price, startDate: startDate)
+    }
+
+    func updateShoe(_ shoe: Shoe) {
+        store.update(shoe)
     }
 
     func deleteShoes(at offsets: IndexSet) {
