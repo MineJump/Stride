@@ -12,6 +12,9 @@ struct ShoesListView: View {
     @State private var editingShoe: Shoe? = nil
     @State private var showingEdit = false
 
+    // Track which rows are expanded
+    @State private var expanded: Set<UUID> = []
+
     var body: some View {
         NavigationStack {
             Group {
@@ -26,11 +29,23 @@ struct ShoesListView: View {
                         ForEach(store.shoes) { shoe in
                             let steps = vm.stats[shoe.id]?.steps ?? 0
                             let km = vm.stats[shoe.id]?.km ?? 0.0
-                            ShoeRow(shoe: shoe, steps: steps, km: km) {
-                                vm.activate(shoeId: shoe.id)
-                                Task { await vm.reloadAll(isInitial: false) }
-                            }
-                            // EDIT: swipe actions
+                            ShoeRow(
+                                shoe: shoe,
+                                steps: steps,
+                                km: km,
+                                isExpanded: expanded.contains(shoe.id),
+                                toggleExpanded: {
+                                    if expanded.contains(shoe.id) {
+                                        expanded.remove(shoe.id)
+                                    } else {
+                                        expanded.insert(shoe.id)
+                                    }
+                                },
+                                onActivate: {
+                                    vm.activate(shoeId: shoe.id)
+                                    Task { await vm.reloadAll(isInitial: false) }
+                                }
+                            )
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(role: .destructive) {
                                     if let index = store.shoes.firstIndex(of: shoe) {
@@ -74,7 +89,6 @@ struct ShoesListView: View {
                 AddShoeView()
                     .presentationDetents([.medium])
             }
-            // EDIT: present AddShoeView in edit mode
             .sheet(isPresented: $showingEdit, onDismiss: { editingShoe = nil }) {
                 if let shoe = editingShoe {
                     AddShoeView(editing: shoe)
@@ -126,6 +140,8 @@ struct ShoeRow: View {
     let shoe: Shoe
     let steps: Int
     let km: Double
+    let isExpanded: Bool
+    var toggleExpanded: () -> Void
     var onActivate: (() -> Void)?
 
     @EnvironmentObject var activity: ActivityManager
@@ -136,45 +152,35 @@ struct ShoeRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                HStack(spacing: 8) {
-                    if isActive {
-                        Image(systemName: "bolt.fill")
-                            .foregroundStyle(.yellow)
-                            .accessibilityHidden(true)
+            // Header: name, steps, km, always-visible Activate button, expand chevron
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Button(action: toggleExpanded) {
+                        HStack(spacing: 6) {
+                            Text(shoe.name)
+                                .font(.headline)
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                .foregroundStyle(.secondary)
+                                .imageScale(.small)
+                        }
+                        .contentShape(Rectangle())
                     }
-                    Text(shoe.name)
-                        .font(.headline)
-                }
-                Spacer()
-                Text("\(Int(km.rounded())) km")
-                    .font(.subheadline)
-            }
+                    .buttonStyle(.plain)
 
-            Group {
-                LabeledContent("Brand") {
-                    Text(shoe.brand.isEmpty ? "—" : shoe.brand).foregroundStyle(.secondary)
-                }
-                LabeledContent("Model") {
-                    Text(shoe.model.isEmpty ? "—" : shoe.model).foregroundStyle(.secondary)
-                }
-                LabeledContent("Price") {
-                    if let price = shoe.price {
-                        Text(price, format: .currency(code: "EUR"))
+                    HStack(spacing: 8) {
+                        Label("\(steps)", systemImage: "figure.walk")
+                            .labelStyle(.titleAndIcon)
+                        Text("·")
                             .foregroundStyle(.secondary)
-                    } else {
-                        Text("—").foregroundStyle(.secondary)
+                        Label("\(Int(km.rounded())) km", systemImage: "map")
+                            .labelStyle(.titleAndIcon)
                     }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
-                LabeledContent("Start date") {
-                    Text(shoe.startDate, style: .date).foregroundStyle(.secondary)
-                }
-            }
-            .font(.subheadline)
 
-            HStack {
-                LabeledContent("Steps") { Text("\(steps)").foregroundStyle(.secondary) }
                 Spacer()
+
                 Button(isActive ? "Active" : "Activate") {
                     onActivate?()
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
@@ -183,7 +189,30 @@ struct ShoeRow: View {
                 .tint(isActive ? .green : .blue)
                 .disabled(isActive)
             }
-            .font(.caption)
+
+            // Expanded details
+            if isExpanded {
+                Group {
+                    LabeledContent("Brand") {
+                        Text(shoe.brand.isEmpty ? "—" : shoe.brand).foregroundStyle(.secondary)
+                    }
+                    LabeledContent("Model") {
+                        Text(shoe.model.isEmpty ? "—" : shoe.model).foregroundStyle(.secondary)
+                    }
+                    LabeledContent("Price") {
+                        if let price = shoe.price {
+                            Text(price, format: .currency(code: "EUR"))
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("—").foregroundStyle(.secondary)
+                        }
+                    }
+                    LabeledContent("Start date") {
+                        Text(shoe.startDate, style: .date).foregroundStyle(.secondary)
+                    }
+                }
+                .font(.subheadline)
+            }
         }
         .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
