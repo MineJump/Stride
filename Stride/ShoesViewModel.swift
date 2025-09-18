@@ -30,12 +30,13 @@ final class ShoesViewModel: ObservableObject {
     }
 
     func reloadAll(isInitial: Bool = false) async {
+        // Keep current UI values until fresh numbers are computed per shoe
         loading = true
         defer { loading = false }
 
-        stats.removeAll()
         let now = Date()
 
+        // Iterate deterministically; update stats[shoe.id] when each result is ready
         for shoe in store.shoes {
             let periods = activity.activePeriods(for: shoe.id)
             var totalSteps = 0
@@ -48,9 +49,20 @@ final class ShoesViewModel: ObservableObject {
                 } catch {
                     let msg = (error as NSError).localizedDescription.lowercased()
                     if msg.contains("no data") || msg.contains("no dato") {
-                        // zero fallback
+                        // leave zeros, but do not clear existing visible stats if present
+                        let existing = stats[shoe.id]
+                        if existing != nil {
+                            // keep previous values if we already had some
+                            stats[shoe.id] = existing
+                        } else {
+                            stats[shoe.id] = ShoeStats(steps: 0, km: 0)
+                        }
+                        continue
                     } else {
                         errorMessage = "Failed for \(shoe.name): \(error.localizedDescription)"
+                        // keep previous if exists
+                        if let existing = stats[shoe.id] { stats[shoe.id] = existing }
+                        continue
                     }
                 }
             } else {
@@ -71,8 +83,13 @@ final class ShoesViewModel: ObservableObject {
                 }
             }
 
+            // Publish result for this shoe only now (keeps others intact)
             stats[shoe.id] = ShoeStats(steps: totalSteps, km: totalKm)
         }
+
+        // Optional: remove stats for shoes that no longer exist (without blanking while loading)
+        let validIds = Set(store.shoes.map { $0.id })
+        stats = stats.filter { validIds.contains($0.key) }
     }
 
     func addShoe(name: String, brand: String, model: String, price: Double?, startDate: Date) {
@@ -86,7 +103,6 @@ final class ShoesViewModel: ObservableObject {
     func deleteShoes(at offsets: IndexSet) {
         let idsToDelete = offsets.compactMap { store.shoes[$0].id }
         store.delete(at: offsets)
-
         if let currentId = activity.currentActiveShoeId, idsToDelete.contains(currentId) {
             activity.closeCurrentPeriod()
         }

@@ -172,7 +172,7 @@ struct ShoeRow: View {
                             .labelStyle(.titleAndIcon)
                         Text("·")
                             .foregroundStyle(.secondary)
-                        Label("\(Int(km.rounded())) km", systemImage: "map")
+                        Label("\(Int(km.rounded())) km", systemImage: "base.unit")
                             .labelStyle(.titleAndIcon)
                     }
                     .font(.caption)
